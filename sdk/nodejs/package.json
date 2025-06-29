@@ -1,0 +1,41 @@
+{
+  "name": "@ethicguard/ai-firewall",
+  "version": "1.0.0",
+  "description": "Node.js SDK for EthicGuard AI Firewall - Real-time AI governance and compliance",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "governance",
+    "compliance",
+    "firewall",
+    "toxicity",
+    "bias",
+    "moderation"
+  ],
+  "author": "EthicGuard",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "crypto": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "jest": "^29.0.0",
+    "@types/jest": "^29.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ethicguard/ai-firewall-nodejs"
+  },
+  "bugs": {
+    "url": "https://github.com/ethicguard/ai-firewall-nodejs/issues"
+  },
+  "homepage": "https://ethicguard.com"
+}
