@@ -15,6 +15,13 @@ export function useAuth() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Helper function to clear auth state immediately
+  const clearAuthState = () => {
+    setUser(null);
+    setProfile(null);
+    setLoading(false);
+  };
+
   useEffect(() => {
     // Check if Supabase is properly configured
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -39,13 +46,13 @@ export function useAuth() {
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
         console.error('Error getting session:', error);
-        // If it's a refresh token error, clear the session
+        // If it's a refresh token error, clear the session immediately
         if (error.message?.includes('refresh_token_not_found') || 
             error.message?.includes('Invalid Refresh Token')) {
           console.log('Invalid refresh token detected, clearing session...');
+          clearAuthState();
           supabase.auth.signOut().catch(console.error);
-          setUser(null);
-          setProfile(null);
+          return;
         }
         setLoading(false);
         return;
@@ -59,13 +66,13 @@ export function useAuth() {
       }
     }).catch((error) => {
       console.error('Error getting session:', error);
-      // Handle refresh token errors
+      // Handle refresh token errors immediately
       if (error.message?.includes('refresh_token_not_found') || 
           error.message?.includes('Invalid Refresh Token')) {
         console.log('Invalid refresh token detected, clearing session...');
+        clearAuthState();
         supabase.auth.signOut().catch(console.error);
-        setUser(null);
-        setProfile(null);
+        return;
       }
       setLoading(false);
     });
@@ -75,13 +82,17 @@ export function useAuth() {
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
         
-        // Handle token refresh errors
+        // Handle token refresh errors - clear state immediately
         if (event === 'TOKEN_REFRESHED' && !session) {
-          console.log('Token refresh failed, signing out...');
-          await supabase.auth.signOut();
-          setUser(null);
-          setProfile(null);
-          setLoading(false);
+          console.log('Token refresh failed, clearing state and signing out...');
+          clearAuthState();
+          await supabase.auth.signOut().catch(console.error);
+          return;
+        }
+
+        // Handle signed out state
+        if (event === 'SIGNED_OUT' || !session) {
+          clearAuthState();
           return;
         }
 
@@ -110,6 +121,20 @@ export function useAuth() {
         return;
       }
 
+      // Validate URL format before making request
+      if (!supabaseUrl.startsWith('https://')) {
+        console.error('Invalid Supabase URL format. Creating demo profile instead.');
+        const demoProfile = {
+          id: userId,
+          email: user?.email || 'demo@ethicguard.com',
+          role: 'developer' as const,
+          full_name: 'Demo User',
+        };
+        setProfile(demoProfile);
+        setLoading(false);
+        return;
+      }
+
       // Add a timeout to prevent hanging requests
       const timeoutPromise = new Promise<null>((_, reject) => {
         setTimeout(() => reject(new Error('Profile fetch timeout')), 10000);
@@ -129,28 +154,66 @@ export function useAuth() {
 
       if (error) {
         console.error('Supabase error fetching profile:', error);
-        // Don't throw the error, just log it and continue
-        setLoading(false);
-        return;
-      }
-      
-      setProfile(data);
-    } catch (error) {
-      console.error('Network error fetching profile:', error);
-      // Handle network errors gracefully - don't throw
-      // This could be due to network issues, CORS, or Supabase being down
-      
-      // If we're in development mode, create a demo profile
-      if (import.meta.env.DEV) {
-        console.log('Creating demo profile in development mode');
+        
+        // Check if this is an auth-related error
+        if (error.message?.includes('refresh_token_not_found') || 
+            error.message?.includes('Invalid Refresh Token') ||
+            error.message?.includes('JWT expired')) {
+          console.log('Auth error during profile fetch, clearing state...');
+          clearAuthState();
+          supabase.auth.signOut().catch(console.error);
+          return;
+        }
+        
+        // For other errors, create a demo profile to keep the app functional
+        console.log('Creating demo profile due to fetch error');
         const demoProfile = {
-          id: user?.id || 'demo-user-123',
+          id: userId,
           email: user?.email || 'demo@ethicguard.com',
           role: 'developer' as const,
           full_name: 'Demo User',
         };
         setProfile(demoProfile);
+        setLoading(false);
+        return;
       }
+      
+      // If no profile data found, create a demo profile
+      if (!data) {
+        console.log('No profile found, creating demo profile');
+        const demoProfile = {
+          id: userId,
+          email: user?.email || 'demo@ethicguard.com',
+          role: 'developer' as const,
+          full_name: 'Demo User',
+        };
+        setProfile(demoProfile);
+      } else {
+        setProfile(data);
+      }
+    } catch (error) {
+      console.error('Network error fetching profile:', error);
+      
+      // Check if this is an auth-related error
+      if (error instanceof Error && 
+          (error.message?.includes('refresh_token_not_found') || 
+           error.message?.includes('Invalid Refresh Token') ||
+           error.message?.includes('JWT expired'))) {
+        console.log('Auth error during profile fetch, clearing state...');
+        clearAuthState();
+        supabase.auth.signOut().catch(console.error);
+        return;
+      }
+      
+      // For any network or other errors, create a demo profile to keep the app functional
+      console.log('Creating demo profile due to network error');
+      const demoProfile = {
+        id: user?.id || userId,
+        email: user?.email || 'demo@ethicguard.com',
+        role: 'developer' as const,
+        full_name: 'Demo User',
+      };
+      setProfile(demoProfile);
     } finally {
       setLoading(false);
     }
@@ -222,29 +285,26 @@ export function useAuth() {
       if (!supabaseUrl || !supabaseAnonKey) {
         // Demo mode - just clear state and redirect
         console.log('Demo mode: clearing state and redirecting');
-        setUser(null);
-        setProfile(null);
-        setLoading(false);
+        clearAuthState();
         
         // Force redirect to home page
         window.location.href = '/';
         return { error: null };
       }
 
-      // Real Supabase sign out
+      // Clear local state immediately BEFORE attempting Supabase sign out
+      console.log('Clearing auth state immediately...');
+      clearAuthState();
+
+      // Then attempt Supabase sign out
       const { error } = await supabase.auth.signOut();
       
       if (error) {
         console.error('Supabase sign out error:', error);
-        return { error };
+        // Don't return the error since we've already cleared state
+      } else {
+        console.log('Successfully signed out from Supabase');
       }
-
-      console.log('Successfully signed out from Supabase');
-      
-      // Clear local state immediately
-      setUser(null);
-      setProfile(null);
-      setLoading(false);
       
       // Force redirect to home page
       window.location.href = '/';
@@ -253,13 +313,11 @@ export function useAuth() {
     } catch (error) {
       console.error('Sign out error:', error);
       
-      // Even if there's an error, clear local state and redirect
-      setUser(null);
-      setProfile(null);
-      setLoading(false);
+      // Ensure state is cleared even if there's an error
+      clearAuthState();
       window.location.href = '/';
       
-      return { error: error as Error };
+      return { error: null }; // Don't return the error since we've handled it
     }
   };
 

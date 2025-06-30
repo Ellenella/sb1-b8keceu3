@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Code, Download, Copy, Check, ExternalLink, Play, Terminal, Book, Shield, Zap, Globe, Key, Settings, AlertTriangle, CheckCircle, Info, Package, FileText, Github, Eye, EyeOff, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Code, Copy, Check, ExternalLink, Book, Shield, Zap, Globe, Key, Settings, Info, Package, X, Eye, EyeOff } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -20,31 +20,12 @@ interface SDKFeature {
   color: string;
 }
 
-interface GitHubData {
-  stars: number;
-  forks: number;
-  downloads: string;
-  version: string;
-  lastUpdate: string;
-  issues: number;
-}
-
-interface NPMData {
-  weeklyDownloads: string;
-  version: string;
-  lastPublished: string;
-  dependencies: number;
-}
-
 export function SDKIntegration() {
   const [activeTab, setActiveTab] = useState('overview');
   const [copiedCode, setCopiedCode] = useState('');
   const [selectedExample, setSelectedExample] = useState<CodeExample | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiKey] = useState('eg_sk_live_abc123def456ghi789jkl012mno345pqr678stu901vwx234yz567abc123def');
-  const [githubData, setGithubData] = useState<GitHubData | null>(null);
-  const [npmData, setNpmData] = useState<NPMData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkModalContent, setLinkModalContent] = useState({ title: '', message: '', url: '' });
   const [showInstallModal, setShowInstallModal] = useState(false);
@@ -54,62 +35,6 @@ export function SDKIntegration() {
     owner: 'ethicguard',
     repo: 'ai-firewall-nodejs',
     packageName: '@ethicguard/ai-firewall'
-  };
-
-  useEffect(() => {
-    fetchGitHubData();
-    fetchNPMData();
-  }, []);
-
-  const fetchGitHubData = async () => {
-    try {
-      // Simulate loading time
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setGithubData({
-        stars: 2147,
-        forks: 312,
-        downloads: '50K+',
-        version: '1.0.0',
-        lastUpdate: '2 days ago',
-        issues: 8
-      });
-    } catch (error) {
-      console.error('Failed to fetch GitHub data:', error);
-      setGithubData({
-        stars: 2100,
-        forks: 300,
-        downloads: '50K+',
-        version: '1.0.0',
-        lastUpdate: 'Recently',
-        issues: 8
-      });
-    }
-  };
-
-  const fetchNPMData = async () => {
-    try {
-      // Simulate loading time
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      setNpmData({
-        weeklyDownloads: '12.5K',
-        version: '1.0.0',
-        lastPublished: '3 days ago',
-        dependencies: 2
-      });
-      
-      setLoading(false);
-    } catch (error) {
-      console.error('Failed to fetch NPM data:', error);
-      setNpmData({
-        weeklyDownloads: '12K',
-        version: '1.0.0',
-        lastPublished: 'Recently',
-        dependencies: 2
-      });
-      setLoading(false);
-    }
   };
 
   const showLinkInfo = (title: string, message: string, url: string) => {
@@ -155,13 +80,13 @@ export function SDKIntegration() {
     {
       icon: Shield,
       title: 'Real-time AI Protection',
-      description: 'Block toxic content, bias, and hallucinations using Claude 3 Sonnet and BERT models',
+      description: 'Block toxic content, bias, and hallucinations',
       color: 'bg-red-100 text-red-600'
     },
     {
       icon: Zap,
       title: 'Lightning Fast',
-      description: 'Sub-100ms detection latency with edge infrastructure and intelligent caching',
+      description: 'Fast detection latency with edge infrastructure and intelligent caching',
       color: 'bg-yellow-100 text-yellow-600'
     },
     {
@@ -183,9 +108,9 @@ export function SDKIntegration() {
       color: 'bg-green-100 text-green-600'
     },
     {
-      icon: FileText,
+      icon: Shield,
       title: 'Compliance Ready',
-      description: 'SOC 2, GDPR, HIPAA compliant with automated audit trails and reporting',
+      description: 'Compliant with automated audit trails and reporting',
       color: 'bg-orange-100 text-orange-600'
     }
   ];
@@ -241,7 +166,6 @@ const result = await firewall.shield({
 if (result.blocked) {
   console.log('Content blocked:', result.reason);
   console.log('Severity:', result.severity);
-  console.log('Risk scores:', result.riskScores);
   
   // Use suggested safe response
   return result.suggestedResponse;
@@ -305,8 +229,7 @@ async function protectedChat(messages, userId) {
   
   return {
     blocked: false,
-    response: response,
-    riskScores: shieldResult.riskScores
+    response: response
   };
 }`
     },
@@ -347,10 +270,7 @@ app.post('/api/ai/chat', async (req, res) => {
     userId: req.body.userId
   });
   
-  res.json({ 
-    response: aiResponse,
-    riskScores: req.ethicguard?.riskScores 
-  });
+  res.json({ response: aiResponse });
 });`
     },
     {
@@ -400,8 +320,7 @@ async function protectedClaude(prompt, userId) {
   
   return { 
     blocked: false, 
-    response, 
-    riskScores: shieldResult.riskScores 
+    response
   };
 }`
     }
@@ -416,35 +335,6 @@ async function protectedClaude(prompt, userId) {
   const filteredExamples = activeTab === 'overview' 
     ? codeExamples 
     : codeExamples.filter(example => example.category === activeTab);
-
-  const stats = [
-    { 
-      label: 'GitHub Stars', 
-      value: loading ? '...' : githubData?.stars.toLocaleString() || '2.1K', 
-      change: '+45%',
-      onClick: openGitHub,
-      description: 'View source code and contribute'
-    },
-    { 
-      label: 'NPM Downloads', 
-      value: loading ? '...' : npmData?.weeklyDownloads || '12.5K', 
-      change: '+23%',
-      onClick: openNPM,
-      description: 'Install package and view details'
-    },
-    { 
-      label: 'Active Integrations', 
-      value: '500+', 
-      change: '+18%',
-      description: 'Production deployments'
-    },
-    { 
-      label: 'Detection Accuracy', 
-      value: '94.2%', 
-      change: '+1.2%',
-      description: 'AI model performance'
-    }
-  ];
 
   return (
     <div className="space-y-8">
@@ -461,15 +351,14 @@ async function protectedClaude(prompt, userId) {
         </div>
         
         <div className="flex items-center justify-center space-x-4 mb-6">
-          <Badge variant="success">v{githubData?.version || '1.0.0'}</Badge>
+          <Badge variant="success">v1.0.0</Badge>
           <Badge variant="info">Production Ready</Badge>
           <Badge variant="neutral">MIT License</Badge>
-          {loading && <Badge variant="neutral">Loading...</Badge>}
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Button 
-            icon={Download} 
+            icon={Package} 
             size="lg"
             onClick={handleNpmInstall}
           >
@@ -477,7 +366,7 @@ async function protectedClaude(prompt, userId) {
           </Button>
           <Button 
             variant="outline" 
-            icon={Github} 
+            icon={Code} 
             size="lg"
             onClick={openGitHub}
           >
@@ -494,102 +383,12 @@ async function protectedClaude(prompt, userId) {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        {stats.map((stat, index) => (
-          <Card 
-            key={index} 
-            className={`text-center ${stat.onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
-            onClick={stat.onClick}
-          >
-            <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-            <div className="text-sm text-gray-600">{stat.label}</div>
-            <div className="text-xs text-green-600 mt-1">{stat.change}</div>
-            <div className="text-xs text-gray-500 mt-1">{stat.description}</div>
-            {stat.onClick && (
-              <div className="mt-2">
-                <ExternalLink className="h-4 w-4 text-gray-400 mx-auto" />
-              </div>
-            )}
-          </Card>
-        ))}
-      </div>
-
-      {/* Real Data Display */}
-      {(githubData || npmData) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {githubData && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Github className="h-5 w-5 mr-2" />
-                  GitHub Repository
-                </CardTitle>
-              </CardHeader>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Stars:</span>
-                  <span className="font-medium">{githubData.stars.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Forks:</span>
-                  <span className="font-medium">{githubData.forks}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Open Issues:</span>
-                  <span className="font-medium">{githubData.issues}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Last Update:</span>
-                  <span className="font-medium">{githubData.lastUpdate}</span>
-                </div>
-                <Button variant="outline" size="sm" className="w-full" onClick={openGitHub} icon={Info}>
-                  Repository Info
-                </Button>
-              </div>
-            </Card>
-          )}
-
-          {npmData && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Package className="h-5 w-5 mr-2" />
-                  NPM Package
-                </CardTitle>
-              </CardHeader>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Weekly Downloads:</span>
-                  <span className="font-medium">{npmData.weeklyDownloads}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Version:</span>
-                  <span className="font-medium">v{npmData.version}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Dependencies:</span>
-                  <span className="font-medium">{npmData.dependencies}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Last Published:</span>
-                  <span className="font-medium">{npmData.lastPublished}</span>
-                </div>
-                <Button variant="outline" size="sm" className="w-full" onClick={openNPM} icon={Info}>
-                  Package Info
-                </Button>
-              </div>
-            </Card>
-          )}
-        </div>
-      )}
-
       {/* Features */}
       <Card>
         <CardHeader>
           <CardTitle>Key Features</CardTitle>
           <p className="text-sm text-gray-600">
-            Comprehensive AI governance with real Claude 3 Sonnet and BERT model integration
+            Comprehensive AI governance
           </p>
         </CardHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -862,7 +661,7 @@ if (result.blocked) {
 
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-start space-x-3">
-                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                  <Check className="h-5 w-5 text-green-600 mt-0.5" />
                   <div>
                     <p className="text-sm font-medium text-green-900">Next Steps</p>
                     <p className="text-sm text-green-800 mt-1">
@@ -918,7 +717,7 @@ if (result.blocked) {
 
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-start space-x-3">
-                  <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+                  <Check className="h-5 w-5 text-green-600 mt-0.5" />
                   <div>
                     <p className="text-sm font-medium text-green-900">Available in Production</p>
                     <p className="text-sm text-green-800 mt-1">

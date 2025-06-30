@@ -11,12 +11,16 @@ import {
   AlertTriangle, 
   Trash2, 
   Plus, 
-  X
+  X,
+  Database,
+  Globe,
+  Loader2
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
+import { blockchainService } from '../services/blockchainService';
 
 interface SettingsSection {
   id: string;
@@ -47,6 +51,22 @@ export function Settings() {
     name: '',
     permissions: [] as string[]
   });
+  const [testingConnection, setTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<{
+    success?: boolean;
+    message?: string;
+    details?: any;
+  } | null>(null);
+
+  // Blockchain settings
+  const [blockchainSettings, setBlockchainSettings] = useState({
+    network: 'testnet',
+    apiKey: '',
+    accountAddress: '',
+    accountMnemonic: '',
+    ipfsEnabled: true,
+    useNodely: true
+  });
 
   // Profile settings with validation
   const [profileData, setProfileData] = useState({
@@ -64,6 +84,19 @@ export function Settings() {
     fullName: '',
     email: ''
   });
+
+  // Load environment variables
+  useEffect(() => {
+    // In a real app, these would be loaded from environment or user settings
+    setBlockchainSettings({
+      network: import.meta.env.VITE_ALGORAND_NETWORK || 'testnet',
+      apiKey: import.meta.env.VITE_ALGORAND_API_KEY || '',
+      accountAddress: import.meta.env.VITE_ALGORAND_ACCOUNT_ADDRESS || '',
+      accountMnemonic: import.meta.env.VITE_ALGORAND_ACCOUNT_MNEMONIC || '',
+      ipfsEnabled: true,
+      useNodely: true
+    });
+  }, []);
 
   // API Keys
   const [apiKeys, setApiKeys] = useState<APIKey[]>([
@@ -98,6 +131,12 @@ export function Settings() {
       title: 'API Keys',
       icon: Key,
       description: 'Create and manage API keys for SDK integration'
+    },
+    {
+      id: 'blockchain',
+      title: 'Blockchain Settings',
+      icon: Database,
+      description: 'Configure Algorand blockchain integration'
     }
   ];
 
@@ -138,6 +177,60 @@ export function Settings() {
     });
     
     setSaving(false);
+  };
+
+  const saveBlockchainSettings = async () => {
+    setSaving(true);
+    
+    try {
+      // Configure blockchain service
+      blockchainService.configureAlgorand({
+        network: blockchainSettings.network as 'mainnet' | 'testnet' | 'betanet',
+        apiKey: blockchainSettings.apiKey,
+        isProduction: true,
+        useNodely: blockchainSettings.useNodely
+      });
+      
+      // In a real app, you would save these settings to a secure storage
+      console.log('Blockchain settings saved:', blockchainSettings);
+      
+      // Show success message
+      alert('Blockchain settings saved successfully!');
+      
+      setHasChanges(false);
+    } catch (error) {
+      console.error('Error saving blockchain settings:', error);
+      alert('Failed to save blockchain settings. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const testAlgorandConnection = async () => {
+    setTestingConnection(true);
+    setConnectionStatus(null);
+    
+    try {
+      // Configure blockchain service with current settings
+      blockchainService.configureAlgorand({
+        network: blockchainSettings.network as 'mainnet' | 'testnet' | 'betanet',
+        apiKey: blockchainSettings.apiKey,
+        isProduction: true,
+        useNodely: blockchainSettings.useNodely
+      });
+      
+      // Test connection
+      const result = await blockchainService.testConnection();
+      setConnectionStatus(result);
+    } catch (error) {
+      console.error('Error testing Algorand connection:', error);
+      setConnectionStatus({
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error occurred'
+      });
+    } finally {
+      setTestingConnection(false);
+    }
   };
 
   const generateApiKey = () => {
@@ -473,6 +566,224 @@ export function Settings() {
                 </div>
               )}
             </div>
+          </div>
+        );
+
+      case 'blockchain':
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Blockchain Configuration</h3>
+                <p className="text-sm text-gray-600">Configure Algorand blockchain integration for audit trail</p>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <Globe className="h-5 w-5 text-blue-600 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">Nodely for Algorand</p>
+                  <p className="text-sm text-blue-800">
+                    Experience the perfect blend of innovation and security with Nodely. Designed to facilitate seamless integration and reliable API access to Algorand's AVM compatible public and hybrid networks.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <Card className="p-6">
+              <h4 className="font-medium text-gray-900 mb-4">Algorand Configuration</h4>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Network
+                  </label>
+                  <select
+                    value={blockchainSettings.network}
+                    onChange={(e) => {
+                      setBlockchainSettings({...blockchainSettings, network: e.target.value});
+                      setHasChanges(true);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="testnet">TestNet</option>
+                    <option value="mainnet">MainNet</option>
+                    <option value="betanet">BetaNet</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    API Key (Nodely)
+                  </label>
+                  <input
+                    type="password"
+                    value={blockchainSettings.apiKey}
+                    onChange={(e) => {
+                      setBlockchainSettings({...blockchainSettings, apiKey: e.target.value});
+                      setHasChanges(true);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter your Nodely API key"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Get an API key from <a href="https://nodely.io" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">Nodely</a>
+                  </p>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Account Address
+                  </label>
+                  <input
+                    type="text"
+                    value={blockchainSettings.accountAddress}
+                    onChange={(e) => {
+                      setBlockchainSettings({...blockchainSettings, accountAddress: e.target.value});
+                      setHasChanges(true);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter your Algorand account address"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Account Mnemonic
+                  </label>
+                  <textarea
+                    value={blockchainSettings.accountMnemonic}
+                    onChange={(e) => {
+                      setBlockchainSettings({...blockchainSettings, accountMnemonic: e.target.value});
+                      setHasChanges(true);
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter your account mnemonic (25 words)"
+                    rows={3}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    This is sensitive information. Never share your mnemonic with anyone.
+                  </p>
+                </div>
+                
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="ipfs-enabled"
+                    checked={blockchainSettings.ipfsEnabled}
+                    onChange={(e) => {
+                      setBlockchainSettings({...blockchainSettings, ipfsEnabled: e.target.checked});
+                      setHasChanges(true);
+                    }}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="ipfs-enabled" className="ml-2 block text-sm text-gray-900">
+                    Enable IPFS Storage for Policy Documents
+                  </label>
+                </div>
+
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="use-nodely"
+                    checked={blockchainSettings.useNodely}
+                    onChange={(e) => {
+                      setBlockchainSettings({...blockchainSettings, useNodely: e.target.checked});
+                      setHasChanges(true);
+                    }}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="use-nodely" className="ml-2 block text-sm text-gray-900">
+                    Use Nodely for Algorand integration (recommended)
+                  </label>
+                </div>
+              </div>
+              
+              <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-yellow-900">Security Warning</p>
+                    <p className="text-sm text-yellow-800">
+                      Your account mnemonic is highly sensitive. In production, use a secure key management system
+                      or hardware wallet integration. This demo implementation is for educational purposes only.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="mt-6">
+                <Button 
+                  onClick={saveBlockchainSettings}
+                  loading={saving}
+                  disabled={saving || !blockchainSettings.apiKey || !blockchainSettings.accountAddress}
+                  className="w-full"
+                >
+                  Save Blockchain Settings
+                </Button>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <h4 className="font-medium text-gray-900 mb-4">Test Connection</h4>
+              
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">
+                  Test your Algorand connection to ensure everything is configured correctly.
+                  This will attempt to connect to the Algorand network and retrieve basic information.
+                </p>
+                
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={testAlgorandConnection}
+                  loading={testingConnection}
+                  disabled={testingConnection || !blockchainSettings.apiKey}
+                  icon={testingConnection ? Loader2 : undefined}
+                >
+                  {testingConnection ? 'Testing Connection...' : 'Test Algorand Connection'}
+                </Button>
+                
+                {connectionStatus && (
+                  <div className={`mt-4 p-4 rounded-lg border ${
+                    connectionStatus.success 
+                      ? 'bg-green-50 border-green-200' 
+                      : 'bg-red-50 border-red-200'
+                  }`}>
+                    <div className="flex items-start space-x-3">
+                      {connectionStatus.success ? (
+                        <Check className="h-5 w-5 text-green-600 mt-0.5" />
+                      ) : (
+                        <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+                      )}
+                      <div>
+                        <p className={`text-sm font-medium ${
+                          connectionStatus.success ? 'text-green-900' : 'text-red-900'
+                        }`}>
+                          {connectionStatus.success ? 'Connection Successful' : 'Connection Failed'}
+                        </p>
+                        <p className={`text-sm ${
+                          connectionStatus.success ? 'text-green-800' : 'text-red-800'
+                        }`}>
+                          {connectionStatus.message}
+                        </p>
+                        {connectionStatus.details && connectionStatus.details.message && (
+                          <p className="text-sm mt-2 font-medium text-blue-800">
+                            {connectionStatus.details.message}
+                          </p>
+                        )}
+                        {connectionStatus.details && (
+                          <div className="mt-2 p-2 bg-white rounded border text-xs font-mono overflow-auto max-h-32">
+                            {JSON.stringify(connectionStatus.details, null, 2)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
         );
 

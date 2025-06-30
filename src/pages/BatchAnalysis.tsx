@@ -23,6 +23,8 @@ import {
 import { Card, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { supabase } from '../lib/supabase';
+import { blockchainService } from '../services/blockchainService';
 
 interface AnalysisResult {
   id: string;
@@ -106,6 +108,128 @@ export function BatchAnalysis() {
   const [selectedResult, setSelectedResult] = useState<AnalysisResult | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load datasets from database on component mount
+  React.useEffect(() => {
+    loadDatasetsFromDatabase();
+  }, []);
+
+  const loadDatasetsFromDatabase = async () => {
+    try {
+      // Check if Supabase is configured
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseAnonKey) {
+        console.log('Supabase not configured, using demo datasets');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('batch_analysis_datasets')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading datasets from database:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        // Transform database data to match our DatasetAnalysis interface
+        const transformedDatasets: DatasetAnalysis[] = data.map(item => ({
+          id: item.id,
+          fileName: item.file_name,
+          uploadTime: item.created_at,
+          totalRecords: item.total_records,
+          processedRecords: item.processed_records,
+          status: item.status,
+          results: item.results || [],
+          summary: item.summary || {
+            totalViolations: 0,
+            blockedContent: 0,
+            avgRiskScore: 0,
+            topViolations: []
+          }
+        }));
+
+        // Merge with existing datasets, prioritizing database data
+        const existingIds = new Set(transformedDatasets.map(d => d.id));
+        const filteredExisting = uploadedDatasets.filter(d => !existingIds.has(d.id));
+        
+        setUploadedDatasets([...transformedDatasets, ...filteredExisting]);
+      }
+    } catch (error) {
+      console.error('Error in loadDatasetsFromDatabase:', error);
+    }
+  };
+
+  // Save dataset to database
+  const saveDatasetToDatabase = async (dataset: DatasetAnalysis) => {
+    try {
+      // Check if Supabase is configured
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseAnonKey) {
+        console.log('Supabase not configured, skipping database save');
+        return;
+      }
+
+      // Get user ID if available
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Transform dataset to match database schema
+      const dbDataset = {
+        id: dataset.id,
+        file_name: dataset.fileName,
+        total_records: dataset.totalRecords,
+        processed_records: dataset.processedRecords,
+        status: dataset.status,
+        results: dataset.results,
+        summary: dataset.summary,
+        user_id: user?.id || null
+      };
+
+      // Insert or update dataset in database
+      const { error } = await supabase
+        .from('batch_analysis_datasets')
+        .upsert(dbDataset, { onConflict: 'id' });
+
+      if (error) {
+        console.error('Error saving dataset to database:', error);
+      } else {
+        console.log('Dataset saved to database successfully');
+        
+        // Create blockchain record for completed datasets
+        if (dataset.status === 'completed') {
+          try {
+            await blockchainService.addRecord({
+              type: 'ai_governance',
+              event: 'Batch Analysis Completed',
+              description: `Batch analysis of ${dataset.fileName} with ${dataset.totalRecords} records completed`,
+              blockchain: 'Algorand',
+              timestamp: new Date().toISOString(),
+              sourceModule: 'AI Governance',
+              severity: dataset.summary.blockedContent > 0 ? 'medium' : 'low',
+              metadata: {
+                userId: user?.id,
+                datasetId: dataset.id,
+                totalRecords: dataset.totalRecords,
+                violations: dataset.summary.totalViolations,
+                blockedContent: dataset.summary.blockedContent,
+                avgRiskScore: dataset.summary.avgRiskScore
+              }
+            });
+          } catch (blockchainError) {
+            console.error('Error creating blockchain record:', blockchainError);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error in saveDatasetToDatabase:', error);
+    }
+  };
 
   // Mock analysis function - in production this would call the AI detection service
   const analyzeContent = (text: string): AnalysisResult => {
@@ -201,6 +325,9 @@ export function BatchAnalysis() {
 
       setCurrentDataset(newDataset);
 
+      // Save initial dataset to database
+      await saveDatasetToDatabase(newDataset);
+
       // Process data in batches
       const batchSize = 5;
       const results: AnalysisResult[] = [];
@@ -226,11 +353,21 @@ export function BatchAnalysis() {
           setUploadProgress(progressPercent);
           
           // Update dataset
-          setCurrentDataset(prev => prev ? {
-            ...prev,
-            processedRecords: processed,
-            results: [...results]
-          } : null);
+          setCurrentDataset(prev => {
+            if (!prev) return null;
+            const updated = {
+              ...prev,
+              processedRecords: processed,
+              results: [...results]
+            };
+            
+            // Save progress to database periodically (every 10%)
+            if (processed % Math.max(1, Math.floor(data.length / 10)) === 0) {
+              saveDatasetToDatabase(updated);
+            }
+            
+            return updated;
+          });
         }
         
         // Small delay to show progress
@@ -261,6 +398,7 @@ export function BatchAnalysis() {
       const completedDataset = {
         ...newDataset,
         status: 'completed' as const,
+        processedRecords: results.length,
         results,
         summary: {
           totalViolations: violations,
@@ -275,13 +413,27 @@ export function BatchAnalysis() {
       // Add to uploaded datasets list
       setUploadedDatasets(prev => [completedDataset, ...prev]);
 
+      // Save final dataset to database
+      await saveDatasetToDatabase(completedDataset);
+
       setIsProcessing(false);
       setUploadProgress(100);
 
     } catch (error) {
       console.error('Error processing file:', error);
       setIsProcessing(false);
-      setCurrentDataset(prev => prev ? { ...prev, status: 'failed' } : null);
+      
+      const failedDataset = currentDataset ? 
+        { ...currentDataset, status: 'failed' as const } : 
+        null;
+      
+      setCurrentDataset(failedDataset);
+      
+      // Save failed status to database
+      if (failedDataset) {
+        await saveDatasetToDatabase(failedDataset);
+      }
+      
       alert(`Error processing file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
@@ -323,10 +475,31 @@ export function BatchAnalysis() {
     setShowResultModal(true);
   };
 
-  const handleDeleteDataset = (datasetId: string) => {
-    setUploadedDatasets(prev => prev.filter(d => d.id !== datasetId));
-    if (currentDataset?.id === datasetId) {
-      setCurrentDataset(null);
+  const handleDeleteDataset = async (datasetId: string) => {
+    try {
+      // Remove from UI
+      setUploadedDatasets(prev => prev.filter(d => d.id !== datasetId));
+      
+      if (currentDataset?.id === datasetId) {
+        setCurrentDataset(null);
+      }
+      
+      // Remove from database if Supabase is configured
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+      
+      if (supabaseUrl && supabaseAnonKey) {
+        const { error } = await supabase
+          .from('batch_analysis_datasets')
+          .delete()
+          .eq('id', datasetId);
+          
+        if (error) {
+          console.error('Error deleting dataset from database:', error);
+        }
+      }
+    } catch (error) {
+      console.error('Error in handleDeleteDataset:', error);
     }
   };
 

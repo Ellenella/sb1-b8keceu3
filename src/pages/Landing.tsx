@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { useUserStats } from '../hooks/useUserStats';
 
 const features = [
   {
@@ -126,14 +127,20 @@ const pricingPlans = [
   },
 ];
 
-const stats = [
-  { label: 'AI Requests Monitored', value: '50M+' },
-  { label: 'Compliance Violations Prevented', value: '125K+' },
-  { label: 'Enterprise Customers', value: '500+' },
-  { label: 'Uptime Guarantee', value: '99.9%' },
-];
-
 export function Landing() {
+  const { totalUsers, enterpriseUsers, loading } = useUserStats();
+
+  // Calculate stats with realistic user data
+  const stats = [
+    { label: 'AI Requests Monitored', value: '2.1M+' },
+    { label: 'Compliance Violations Prevented', value: '8.5K+' },
+    { 
+      label: 'Enterprise Customers', 
+      value: loading ? '...' : `${enterpriseUsers}+` 
+    },
+    { label: 'Uptime Guarantee', value: '99.9%' },
+  ];
+
   return (
     <div className="min-h-screen bg-white">
       {/* Navigation */}
@@ -319,7 +326,7 @@ export function Landing() {
             Ready to Secure Your AI?
           </h2>
           <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
-            Join hundreds of organizations already using EthicGuard to ensure their AI systems are safe, compliant, and trustworthy.
+            Join {loading ? 'forward-thinking' : `${enterpriseUsers}+`} organizations already using EthicGuard to ensure their AI systems are safe, compliant, and trustworthy.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/auth">

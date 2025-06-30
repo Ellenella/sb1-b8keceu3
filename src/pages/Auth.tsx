@@ -10,7 +10,6 @@ export function Auth() {
   const mode = searchParams.get('mode');
   
   const [isSignUp, setIsSignUp] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -21,7 +20,7 @@ export function Auth() {
     role: 'developer' as const,
   });
 
-  const { signIn, signUp, resetPassword } = useAuth();
+  const { signIn, signUp } = useAuth();
 
   // Check if Supabase is configured
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -31,7 +30,6 @@ export function Auth() {
   // Handle password reset mode
   useEffect(() => {
     if (mode === 'reset') {
-      setShowForgotPassword(false);
       setSuccess('Please check your email for password reset instructions.');
     }
   }, [mode]);
@@ -89,32 +87,6 @@ export function Auth() {
     }
   };
 
-  const handleForgotPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-    setSuccess(null);
-
-    if (!formData.email.trim()) {
-      setError('Please enter your email address.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const { error } = await resetPassword(formData.email);
-      if (error) throw error;
-      
-      setSuccess('Password reset instructions have been sent to your email.');
-      setShowForgotPassword(false);
-    } catch (error: any) {
-      console.error('Reset password error:', error);
-      setError(error.message || 'Failed to send reset email. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const resetForm = () => {
     setFormData({
       email: '',
@@ -128,11 +100,6 @@ export function Auth() {
 
   const switchMode = () => {
     setIsSignUp(!isSignUp);
-    resetForm();
-  };
-
-  const toggleForgotPassword = () => {
-    setShowForgotPassword(!showForgotPassword);
     resetForm();
   };
 
@@ -264,197 +231,123 @@ export function Auth() {
 
               {/* Auth Form */}
               <Card>
-                {showForgotPassword ? (
-                  <form onSubmit={handleForgotPassword} className="space-y-6">
-                    <div className="text-center">
-                      <h2 className="text-xl font-semibold text-gray-900">Reset Password</h2>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Enter your email address and we'll send you a link to reset your password
-                      </p>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="text-center">
+                    <h2 className="text-xl font-semibold text-gray-900">
+                      {isSignUp ? 'Create your account' : 'Sign in to your account'}
+                    </h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {isSignUp ? 'Get started with EthicGuard' : 'Welcome back to EthicGuard'}
+                    </p>
+                  </div>
+
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                      <div className="flex items-center">
+                        <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
+                        <p className="text-sm text-red-700">{error}</p>
+                      </div>
                     </div>
+                  )}
 
-                    {error && (
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                        <div className="flex items-center">
-                          <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-                          <p className="text-sm text-red-700">{error}</p>
-                        </div>
+                  {success && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <div className="flex items-center">
+                        <Mail className="h-4 w-4 text-green-500 mr-2" />
+                        <p className="text-sm text-green-700">{success}</p>
                       </div>
-                    )}
+                    </div>
+                  )}
 
-                    {success && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                        <div className="flex items-center">
-                          <Mail className="h-4 w-4 text-green-500 mr-2" />
-                          <p className="text-sm text-green-700">{success}</p>
-                        </div>
-                      </div>
-                    )}
-
+                  {isSignUp && (
                     <div>
-                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                        Email Address
+                      <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
+                        Full Name <span className="text-red-500">*</span>
                       </label>
                       <input
-                        id="email"
-                        type="email"
+                        id="fullName"
+                        type="text"
                         required
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        value={formData.fullName}
+                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter your email address"
+                        placeholder="Enter your full name"
                       />
                     </div>
+                  )}
 
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      loading={loading}
-                      icon={Mail}
-                    >
-                      Send Reset Link
-                    </Button>
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                      Email <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="email"
+                      type="email"
+                      required
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter your email"
+                    />
+                  </div>
 
-                    <div className="text-center">
-                      <button
-                        type="button"
-                        onClick={toggleForgotPassword}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center justify-center"
-                      >
-                        <ArrowLeft className="h-4 w-4 mr-1" />
-                        Back to Sign In
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="text-center">
-                      <h2 className="text-xl font-semibold text-gray-900">
-                        {isSignUp ? 'Create your account' : 'Sign in to your account'}
-                      </h2>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {isSignUp ? 'Get started with EthicGuard' : 'Welcome back to EthicGuard'}
-                      </p>
-                    </div>
-
-                    {error && (
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                        <div className="flex items-center">
-                          <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-                          <p className="text-sm text-red-700">{error}</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {success && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                        <div className="flex items-center">
-                          <Mail className="h-4 w-4 text-green-500 mr-2" />
-                          <p className="text-sm text-green-700">{success}</p>
-                        </div>
-                      </div>
-                    )}
-
+                  <div>
+                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                      Password <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="password"
+                      type="password"
+                      required
+                      minLength={6}
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter your password"
+                    />
                     {isSignUp && (
-                      <div>
-                        <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-2">
-                          Full Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          id="fullName"
-                          type="text"
-                          required
-                          value={formData.fullName}
-                          onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Enter your full name"
-                        />
-                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
                     )}
+                  </div>
 
+                  {isSignUp && (
                     <div>
-                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                        Email <span className="text-red-500">*</span>
+                      <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
+                        Role
                       </label>
-                      <input
-                        id="email"
-                        type="email"
-                        required
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      <select
+                        id="role"
+                        value={formData.role}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter your email"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                        Password <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        id="password"
-                        type="password"
-                        required
-                        minLength={6}
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter your password"
-                      />
-                      {isSignUp && (
-                        <p className="text-xs text-gray-500 mt-1">Password must be at least 6 characters long</p>
-                      )}
-                    </div>
-
-                    {isSignUp && (
-                      <div>
-                        <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
-                          Role
-                        </label>
-                        <select
-                          id="role"
-                          value={formData.role}
-                          onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="developer">Developer</option>
-                          <option value="compliance_officer">Compliance Officer</option>
-                          <option value="auditor">Auditor</option>
-                          <option value="executive">Executive</option>
-                        </select>
-                      </div>
-                    )}
-
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      loading={loading}
-                      icon={ArrowRight}
-                    >
-                      {isSignUp ? 'Create Account' : 'Sign In'}
-                    </Button>
-
-                    <div className="flex flex-col space-y-3 text-center">
-                      {!isSignUp && (
-                        <button
-                          type="button"
-                          onClick={toggleForgotPassword}
-                          className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                          Forgot your password?
-                        </button>
-                      )}
-                      
-                      <button
-                        type="button"
-                        onClick={switchMode}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                       >
-                        {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-                      </button>
+                        <option value="developer">Developer</option>
+                        <option value="compliance_officer">Compliance Officer</option>
+                        <option value="auditor">Auditor</option>
+                        <option value="executive">Executive</option>
+                      </select>
                     </div>
-                  </form>
-                )}
+                  )}
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    loading={loading}
+                    icon={ArrowRight}
+                  >
+                    {isSignUp ? 'Create Account' : 'Sign In'}
+                  </Button>
+
+                  <div className="flex flex-col space-y-3 text-center">
+                    <button
+                      type="button"
+                      onClick={switchMode}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+                    </button>
+                  </div>
+                </form>
               </Card>
 
               <div className="text-center mt-8 text-xs text-gray-500">

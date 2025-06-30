@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { botService } from './botService';
 import { aiDetectionService } from './aiDetectionService';
+import { blockchainService } from './blockchainService';
 
 export interface DashboardMetrics {
   totalRequests: number;
@@ -140,9 +141,9 @@ export class DashboardAPI {
       
       try {
         if (supabase) {
-          await supabase.from('incidents').insert({
+          const { data: incidentData, error: incidentError } = await supabase.from('incidents').insert({
             prompt_hash: this.hashContent(prompt),
-            response_hash: response ? this.hashContent(response) : null,
+            response_hash: response ? this.hashContent(response) : this.hashContent('no_response'),
             rule_violated: detectionResult.detectedIssues.join(', ') || 'No violations',
             severity: detectionResult.severity,
             blocked_reason: detectionResult.detectedIssues.join('; '),
@@ -154,7 +155,32 @@ export class DashboardAPI {
               confidence: detectionResult.confidence,
               detectionMethod: 'claude-bert-hybrid'
             }
-          });
+          }).select('id').single();
+
+          if (incidentError) {
+            console.error('Failed to log incident to database:', incidentError);
+          } else if (incidentData && detectionResult.blocked) {
+            // If incident was blocked, create blockchain record
+            try {
+              await blockchainService.addRecord({
+                type: 'ai_governance',
+                event: 'Content Blocked',
+                description: `AI content blocked: ${detectionResult.detectedIssues.join(', ')}`,
+                blockchain: 'Algorand',
+                timestamp: new Date().toISOString(),
+                sourceModule: 'AI Governance',
+                severity: detectionResult.severity,
+                metadata: {
+                  userId,
+                  incidentId: incidentData.id,
+                  riskScores: detectionResult.riskScores,
+                  confidence: detectionResult.confidence
+                }
+              });
+            } catch (blockchainError) {
+              console.error('Failed to create blockchain record:', blockchainError);
+            }
+          }
         }
       } catch (dbError) {
         console.error('Failed to log incident to database:', dbError);

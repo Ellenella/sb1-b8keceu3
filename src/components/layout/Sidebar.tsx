@@ -11,7 +11,8 @@ import {
   Bot,
   Upload,
   Code,
-  Settings
+  Settings,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -21,7 +22,7 @@ const navigation = [
   { name: 'AI Governance', href: '/ai-governance', icon: Brain, roles: ['developer', 'compliance_officer', 'auditor', 'executive'] },
   { name: 'Batch Analysis', href: '/batch-analysis', icon: Upload, roles: ['developer', 'compliance_officer', 'auditor', 'executive'] },
   { name: 'Privacy & Terms', href: '/privacy-terms', icon: Lock, roles: ['developer', 'compliance_officer', 'auditor', 'executive'] },
-  { name: 'Audit Trail', href: '/audit-trail', icon: Database, roles: ['auditor', 'executive', 'compliance_officer'] },
+  { name: 'Audit Trail', href: '/audit-trail', icon: Database, roles: ['auditor', 'executive', 'compliance_officer', 'developer'] },
   { name: 'SDK Integration', href: '/sdk', icon: Code, roles: ['developer'] },
   { name: 'Settings', href: '/settings', icon: Settings, roles: ['developer', 'compliance_officer', 'auditor', 'executive'] },
 ];

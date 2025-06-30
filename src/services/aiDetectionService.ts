@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { blockchainService } from './blockchainService';
 
 export interface DetectionResult {
   blocked: boolean;
@@ -93,6 +94,11 @@ class AIDetectionService {
       else if (maxRisk > 75) severity = 'high';
       else if (maxRisk > 50) severity = 'medium';
 
+      // Create blockchain record for significant detections
+      if (blocked || severity === 'high' || severity === 'critical') {
+        this.createBlockchainRecord(prompt, response, detectedIssues, severity, riskScores);
+      }
+
       return {
         blocked,
         confidence: maxRisk,
@@ -113,6 +119,47 @@ class AIDetectionService {
         riskScores: { toxicity: 0, bias: 0, hallucination: 0, pii: 0 },
         detectedIssues: ['Detection service unavailable']
       };
+    }
+  }
+
+  /**
+   * Create blockchain record for significant AI governance decisions
+   */
+  private async createBlockchainRecord(
+    prompt: string, 
+    response: string | undefined, 
+    detectedIssues: string[], 
+    severity: 'low' | 'medium' | 'high' | 'critical',
+    riskScores: {
+      toxicity: number;
+      bias: number;
+      hallucination: number;
+      pii: number;
+    }
+  ): Promise<void> {
+    try {
+      // Get user ID if available
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
+
+      // Create a record on the blockchain
+      await blockchainService.addRecord({
+        type: 'ai_governance',
+        event: 'AI Governance Decision',
+        description: `AI content ${severity} risk detected: ${detectedIssues.join(', ')}`,
+        blockchain: 'Algorand',
+        timestamp: new Date().toISOString(),
+        sourceModule: 'AI Governance',
+        severity,
+        metadata: {
+          userId,
+          complianceScore: 100 - Math.max(...Object.values(riskScores)),
+          riskScores
+        }
+      });
+    } catch (error) {
+      console.error('Failed to create blockchain record for AI detection:', error);
+      // Continue without blockchain record - non-critical failure
     }
   }
 

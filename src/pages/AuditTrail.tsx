@@ -30,20 +30,22 @@ import {
   Hash,
   Layers,
   Verified,
-  Info
+  Info,
+  Key
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { dashboardAPI } from '../services/api';
 import { botService } from '../services/botService';
+import { blockchainService } from '../services/blockchainService';
 
 interface BlockchainRecord {
   id: string;
   type: 'ai_governance' | 'privacy_policy' | 'compliance_rule' | 'incident_response';
   event: string;
   description: string;
-  blockchain: 'Algorand' | 'Solana';
+  blockchain: 'Algorand';
   txHash: string;
   blockHeight: number;
   timestamp: string;
@@ -144,112 +146,23 @@ export function AuditTrail() {
     try {
       setLoading(true);
       
-      // Get data from AI Governance (bot incidents)
-      const aiIncidents = await dashboardAPI.getRecentIncidents();
-      const botMetrics = botService.getAggregatedMetrics();
-      
-      // Generate blockchain records from AI Governance data
-      const aiGovernanceRecords = aiIncidents.slice(0, 8).map((incident, index) => ({
-        id: `ai_gov_${incident.id}`,
-        type: 'ai_governance' as const,
-        event: 'AI Governance Decision',
-        description: `${incident.type}: ${incident.message}`,
-        blockchain: (index % 2 === 0 ? 'Algorand' : 'Solana') as const,
-        txHash: generateTxHash(),
-        blockHeight: 15847392 + index,
-        timestamp: incident.time,
-        status: 'confirmed' as const,
-        gasUsed: Math.floor(Math.random() * 1000) + 500,
-        dataHash: generateDataHash(),
-        sourceModule: 'AI Governance',
-        severity: incident.severity,
-        metadata: {
-          botId: incident.botId,
-          complianceScore: incident.confidence || 85,
-          affectedUsers: Math.floor(Math.random() * 100) + 1,
-          dataSize: Math.floor(Math.random() * 1024) + 256
-        }
-      }));
-
-      // Generate Privacy Policy records
-      const privacyRecords = [
-        {
-          id: 'privacy_001',
-          type: 'privacy_policy' as const,
-          event: 'Privacy Policy Update',
-          description: 'GDPR compliance policy v2.3 published with enhanced data retention clauses',
-          blockchain: 'Algorand' as const,
-          txHash: generateTxHash(),
-          blockHeight: 15847401,
-          timestamp: '2 hours ago',
-          status: 'confirmed' as const,
-          gasUsed: 750,
-          dataHash: generateDataHash(),
-          sourceModule: 'Privacy & Terms',
-          severity: 'medium' as const,
-          metadata: {
-            policyVersion: '2.3',
-            affectedUsers: 15847,
-            dataSize: 2048
-          }
-        },
-        {
-          id: 'privacy_002',
-          type: 'privacy_policy' as const,
-          event: 'Data Flow Monitoring',
-          description: 'Non-compliant data transfer blocked - PII exposure prevented',
-          blockchain: 'Solana' as const,
-          txHash: generateTxHash(),
-          blockHeight: 234567890,
-          timestamp: '4 hours ago',
-          status: 'confirmed' as const,
-          gasUsed: 892,
-          dataHash: generateDataHash(),
-          sourceModule: 'Privacy & Terms',
-          severity: 'high' as const,
-          metadata: {
-            affectedUsers: 1,
-            dataSize: 512
-          }
-        }
-      ];
-
-      // Generate Compliance Dashboard records
-      const complianceRecords = [
-        {
-          id: 'compliance_001',
-          type: 'compliance_rule' as const,
-          event: 'Compliance Rule Activation',
-          description: 'New bias detection rule activated for financial services compliance',
-          blockchain: 'Algorand' as const,
-          txHash: generateTxHash(),
-          blockHeight: 15847405,
-          timestamp: '6 hours ago',
-          status: 'confirmed' as const,
-          gasUsed: 1200,
-          dataHash: generateDataHash(),
-          sourceModule: 'Dashboard',
-          severity: 'medium' as const,
-          metadata: {
-            ruleId: 'rule_bias_financial_001',
-            complianceScore: botMetrics.avgCompliance,
-            affectedUsers: botMetrics.totalRequests,
-            dataSize: 1024
-          }
-        }
-      ];
-
-      const allRecords = [...aiGovernanceRecords, ...privacyRecords, ...complianceRecords]
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      setAuditRecords(allRecords);
+      // Get blockchain records from service
+      const records = await blockchainService.getAuditRecords();
+      setAuditRecords(records);
 
       // Update metrics
       setMetrics({
-        totalRecords: allRecords.length,
-        verifiedRecords: allRecords.filter(r => r.status === 'confirmed').length,
-        pendingRecords: allRecords.filter(r => r.status === 'pending').length,
-        complianceScore: Math.round(botMetrics.avgCompliance)
+        totalRecords: records.length,
+        verifiedRecords: records.filter(r => r.status === 'confirmed').length,
+        pendingRecords: records.filter(r => r.status === 'pending').length,
+        complianceScore: await blockchainService.getComplianceScore()
+      });
+
+      // Update module record counts
+      auditModules.forEach(module => {
+        module.recordsCount = records.filter(r => 
+          r.sourceModule.includes(module.sourceData.split(' ')[0])
+        ).length;
       });
 
     } catch (error) {
@@ -257,24 +170,6 @@ export function AuditTrail() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const generateTxHash = () => {
-    const chars = '0123456789abcdef';
-    let hash = '0x';
-    for (let i = 0; i < 64; i++) {
-      hash += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return hash;
-  };
-
-  const generateDataHash = () => {
-    const chars = '0123456789abcdef';
-    let hash = '';
-    for (let i = 0; i < 64; i++) {
-      hash += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return hash;
   };
 
   const filteredRecords = auditRecords.filter(record => {
@@ -295,13 +190,7 @@ export function AuditTrail() {
   };
 
   const openBlockchainExplorer = (record: BlockchainRecord) => {
-    const explorerUrls = {
-      Algorand: `https://testnet.algoexplorer.io/tx/${record.txHash}`,
-      Solana: `https://explorer.solana.com/tx/${record.txHash}?cluster=devnet`
-    };
-    
-    // In demo mode, show information instead of opening broken link
-    alert(`Demo Mode: In production, this would open ${explorerUrls[record.blockchain]} to verify the transaction on ${record.blockchain} blockchain.`);
+    blockchainService.openExplorer(record);
   };
 
   const getSeverityColor = (severity: string) => {
@@ -324,38 +213,21 @@ export function AuditTrail() {
     }
   };
 
-  const exportAuditTrail = () => {
-    const exportData = {
-      exportDate: new Date().toISOString(),
-      totalRecords: filteredRecords.length,
-      records: filteredRecords.map(record => ({
-        id: record.id,
-        type: record.type,
-        event: record.event,
-        description: record.description,
-        blockchain: record.blockchain,
-        txHash: record.txHash,
-        blockHeight: record.blockHeight,
-        timestamp: record.timestamp,
-        status: record.status,
-        sourceModule: record.sourceModule,
-        severity: record.severity,
-        metadata: record.metadata
-      }))
-    };
-
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `audit-trail-export-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const exportAuditTrail = async () => {
+    await blockchainService.exportAuditTrail(filteredRecords);
   };
 
-  if (loading) {
+  const verifyRecord = async (record: BlockchainRecord) => {
+    try {
+      const verificationResult = await blockchainService.verifyRecord(record.id);
+      alert(`Record verification: ${verificationResult.verified ? 'Successful' : 'Failed'}\n\nBlockchain: ${record.blockchain}\nTransaction: ${record.txHash}\nBlock Height: ${record.blockHeight}`);
+    } catch (error) {
+      console.error('Verification error:', error);
+      alert('Verification failed. Please try again.');
+    }
+  };
+
+  if (loading && auditRecords.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -377,9 +249,6 @@ export function AuditTrail() {
           </p>
         </div>
         <div className="flex space-x-3">
-          <Button variant="outline" icon={Settings} onClick={() => setShowVerificationModal(true)}>
-            Verification Portal
-          </Button>
           <Button icon={Download} onClick={exportAuditTrail}>
             Export Records
           </Button>
@@ -389,7 +258,7 @@ export function AuditTrail() {
       {/* Performance Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between p-6">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Records</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{metrics.totalRecords}</p>
@@ -398,14 +267,14 @@ export function AuditTrail() {
               <Database className="h-6 w-6 text-blue-600" />
             </div>
           </div>
-          <div className="mt-4 flex items-center">
+          <div className="px-6 pb-6 flex items-center">
             <span className="text-sm font-medium text-green-600">+{Math.floor(Math.random() * 10) + 5}%</span>
             <span className="text-sm text-gray-500 ml-2">from last week</span>
           </div>
         </Card>
 
         <Card>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between p-6">
             <div>
               <p className="text-sm font-medium text-gray-600">Verified Records</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{metrics.verifiedRecords}</p>
@@ -414,14 +283,14 @@ export function AuditTrail() {
               <Verified className="h-6 w-6 text-green-600" />
             </div>
           </div>
-          <div className="mt-4 flex items-center">
+          <div className="px-6 pb-6 flex items-center">
             <span className="text-sm font-medium text-green-600">100%</span>
             <span className="text-sm text-gray-500 ml-2">verification rate</span>
           </div>
         </Card>
 
         <Card>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between p-6">
             <div>
               <p className="text-sm font-medium text-gray-600">Compliance Score</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{metrics.complianceScore}%</p>
@@ -430,14 +299,14 @@ export function AuditTrail() {
               <Shield className="h-6 w-6 text-purple-600" />
             </div>
           </div>
-          <div className="mt-4 flex items-center">
+          <div className="px-6 pb-6 flex items-center">
             <span className="text-sm font-medium text-green-600">+2.1%</span>
             <span className="text-sm text-gray-500 ml-2">improvement</span>
           </div>
         </Card>
 
         <Card>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between p-6">
             <div>
               <p className="text-sm font-medium text-gray-600">Active Modules</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{auditModules.filter(m => m.status === 'active').length}</p>
@@ -446,7 +315,7 @@ export function AuditTrail() {
               <Activity className="h-6 w-6 text-orange-600" />
             </div>
           </div>
-          <div className="mt-4 flex items-center">
+          <div className="px-6 pb-6 flex items-center">
             <span className="text-sm font-medium text-blue-600">All systems</span>
             <span className="text-sm text-gray-500 ml-2">operational</span>
           </div>
@@ -459,7 +328,7 @@ export function AuditTrail() {
           <CardTitle>Integrated Audit Modules</CardTitle>
           <p className="text-sm text-gray-600">Blockchain recording from AI Governance and Privacy systems</p>
         </CardHeader>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
           {auditModules.map((module) => (
             <div key={module.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-4">
@@ -498,7 +367,7 @@ export function AuditTrail() {
       </Card>
 
       {/* Filters */}
-      <Card>
+      <Card className="p-6">
         <div className="flex flex-col lg:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -528,7 +397,6 @@ export function AuditTrail() {
           >
             <option value="all">All Blockchains</option>
             <option value="Algorand">Algorand</option>
-            <option value="Solana">Solana</option>
           </select>
         </div>
       </Card>
@@ -539,64 +407,64 @@ export function AuditTrail() {
           <CardTitle>Immutable Audit Records ({filteredRecords.length})</CardTitle>
           <p className="text-sm text-gray-600">Blockchain-verified compliance and governance events</p>
         </CardHeader>
-        <div className="space-y-4">
-          {filteredRecords.map((record) => {
-            const IconComponent = getTypeIcon(record.type);
-            return (
-              <div 
-                key={record.id} 
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
-                onClick={() => {
-                  setSelectedRecord(record);
-                  setShowRecordModal(true);
-                }}
-              >
-                <div className="flex items-center space-x-4 flex-1">
-                  <div className="flex-shrink-0">
-                    <IconComponent className={`h-5 w-5 ${
-                      record.severity === 'critical' ? 'text-red-500' :
-                      record.severity === 'high' ? 'text-orange-500' : 
-                      record.severity === 'medium' ? 'text-blue-500' : 'text-green-500'
-                    }`} />
+        <div className="p-6 space-y-4">
+          {filteredRecords.length > 0 ? (
+            filteredRecords.map((record) => {
+              const IconComponent = getTypeIcon(record.type);
+              return (
+                <div 
+                  key={record.id} 
+                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                  onClick={() => {
+                    setSelectedRecord(record);
+                    setShowRecordModal(true);
+                  }}
+                >
+                  <div className="flex items-center space-x-4 flex-1">
+                    <div className="flex-shrink-0">
+                      <IconComponent className={`h-5 w-5 ${
+                        record.severity === 'critical' ? 'text-red-500' :
+                        record.severity === 'high' ? 'text-orange-500' : 
+                        record.severity === 'medium' ? 'text-blue-500' : 'text-green-500'
+                      }`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-1">
+                        <p className="text-sm font-medium text-gray-900">{record.event}</p>
+                        <Badge variant="info" size="sm">{record.sourceModule}</Badge>
+                        <Badge variant="neutral" size="sm">{record.blockchain}</Badge>
+                      </div>
+                      <p className="text-sm text-gray-600 truncate">{record.description}</p>
+                      <div className="flex items-center space-x-4 mt-1 text-xs text-gray-500">
+                        <span>Block: {record.blockHeight.toLocaleString()}</span>
+                        <span>Gas: {record.gasUsed}</span>
+                        <span>{record.timestamp}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-2 mb-1">
-                      <p className="text-sm font-medium text-gray-900">{record.event}</p>
-                      <Badge variant="info" size="sm">{record.sourceModule}</Badge>
-                      <Badge variant="neutral" size="sm">{record.blockchain}</Badge>
-                    </div>
-                    <p className="text-sm text-gray-600 truncate">{record.description}</p>
-                    <div className="flex items-center space-x-4 mt-1 text-xs text-gray-500">
-                      <span>Block: {record.blockHeight.toLocaleString()}</span>
-                      <span>Gas: {record.gasUsed}</span>
-                      <span>{record.timestamp}</span>
-                    </div>
+                  <div className="flex items-center space-x-3 flex-shrink-0">
+                    <Badge variant={getSeverityColor(record.severity) as any}>
+                      {record.severity}
+                    </Badge>
+                    <Badge variant={record.status === 'confirmed' ? 'success' : 'warning'}>
+                      {record.status}
+                    </Badge>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openBlockchainExplorer(record);
+                      }}
+                      className="p-1 text-blue-600 hover:text-blue-700"
+                      title="View on blockchain explorer"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </button>
+                    <Eye className="h-4 w-4 text-gray-400" />
                   </div>
                 </div>
-                <div className="flex items-center space-x-3 flex-shrink-0">
-                  <Badge variant={getSeverityColor(record.severity) as any}>
-                    {record.severity}
-                  </Badge>
-                  <Badge variant={record.status === 'confirmed' ? 'success' : 'warning'}>
-                    {record.status}
-                  </Badge>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openBlockchainExplorer(record);
-                    }}
-                    className="p-1 text-blue-600 hover:text-blue-700"
-                    title="View on blockchain explorer"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                  </button>
-                  <Eye className="h-4 w-4 text-gray-400" />
-                </div>
-              </div>
-            );
-          })}
-          
-          {filteredRecords.length === 0 && (
+              );
+            })
+          ) : (
             <div className="text-center py-8">
               <Database className="h-8 w-8 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-500">No audit records match your filters</p>
@@ -734,9 +602,18 @@ export function AuditTrail() {
                 >
                   View on {selectedRecord.blockchain} Explorer
                 </Button>
-                <Button onClick={() => setShowRecordModal(false)}>
-                  Close
-                </Button>
+                <div className="flex space-x-3">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => verifyRecord(selectedRecord)}
+                    icon={Verified}
+                  >
+                    Verify Record
+                  </Button>
+                  <Button onClick={() => setShowRecordModal(false)}>
+                    Close
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -775,7 +652,7 @@ export function AuditTrail() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-green-700">Blockchain Networks:</span>
-                    <span className="font-medium text-green-900">Algorand, Solana</span>
+                    <span className="font-medium text-green-900">Algorand</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-green-700">Compliance Score:</span>
@@ -799,6 +676,21 @@ export function AuditTrail() {
                     <div className="font-medium text-gray-900">Data Flow Compliance</div>
                     <div className="text-sm text-gray-600">Verify data processing and transfer records</div>
                   </button>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start space-x-3">
+                  <Key className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">Regulator Access</p>
+                    <p className="text-sm text-blue-800">
+                      Generate a read-only API key for regulatory authorities to verify compliance
+                    </p>
+                    <Button variant="outline" size="sm" className="mt-2" icon={Key}>
+                      Generate Regulator Key
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
