@@ -1,6 +1,6 @@
 # Contributing to EthicGuard AI Firewall
 
-We welcome contributions to the EthicGuard AI Firewall SDK! This document provides guidelines for contributing to the project.
+We welcome contributions to the EthicGuard AI Firewall SDK! This document provides guidelines for contributing to the project. Feel free to email to fitsumella90@gmail.com.
 
 ## 🚀 Getting Started
 
